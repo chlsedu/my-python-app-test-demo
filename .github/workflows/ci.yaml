@@ -1,0 +1,70 @@
+name: CI with Helm and kind
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest requests yamllint kubeval kind
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: YAML Lint
+        run: yamllint k8s/
+
+      - name: Helm Lint
+        run: helm lint charts/myapp
+
+      - name: Kubeval Validate Manifests
+        run: kubeval k8s/deployment.yaml k8s/service.yaml || true
+
+      - name: Run Unit Tests
+        run: pytest tests/test_unit.py
+
+      - name: Setup kind cluster
+        run: kind create cluster --name ci-testing
+
+      - name: Deploy Helm Chart to kind cluster
+        run: helm upgrade --install myapp-release charts/myapp --wait --timeout 120s
+
+      - name: Wait for pods ready
+        run: kubectl wait --for=condition=Ready pod -l app=myapp --timeout=90s
+
+      - name: Run Integration Tests
+        run: pytest tests/test_integration.py
+
+      - name: Run E2E Tests
+        run: pytest tests/test_e2e.py
+
+      - name: Helm uninstall
+        if: always()
+        run: helm uninstall myapp-release
+
+      - name: Delete kind cluster
+        if: always()
+        run: kind delete cluster --name ci-testing
