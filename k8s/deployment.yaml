@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,8 +16,8 @@ spec:
         app: myapp
     spec:
       containers:
-      - name: myapp
-        image: python:3.9-slim
-        command: ["python3", "-m", "http.server", "80"]
-        ports:
-        - containerPort: 80
+        - name: myapp
+          image: python:3.9-slim
+          command: ["python3", "-m", "http.server", "80"]
+          ports:
+            - containerPort: 80
